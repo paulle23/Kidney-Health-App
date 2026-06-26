@@ -14,7 +14,7 @@ class results : AppCompatActivity() {
         bind= ActivityResultsBinding.inflate(layoutInflater)
         setContentView(bind.root)
         bind.uname.text = UserSession.username
-        //bind.password.text = UserSession.password//value1 (optional: avoid storing passwords globally)
+        bind.password.text = UserSession.password//value1 (optional: avoid storing passwords globally)
         bind.name.text = UserSession.name
         bind.demographic.text = UserSession.demographic
         bind.email.text = UserSession.email
