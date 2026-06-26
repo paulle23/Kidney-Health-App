@@ -3,6 +3,7 @@ import android.content.ContentValues
 import android.content.Context
 import android.database.sqlite.SQLiteDatabase
 import android.database.sqlite.SQLiteOpenHelper
+//SqLiteDataBase that contains all of the user login information
 class DB_class(context: Context): SQLiteOpenHelper(context,DATABASE_NAME,null,DATABASE_VERSION) {//extends SQLiteOpenHelper
     companion object {//column names
         private val DATABASE_VERSION = 1
