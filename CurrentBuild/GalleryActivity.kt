@@ -11,7 +11,7 @@ import androidx.recyclerview.widget.RecyclerView
 import com.example.firedatabase_assis.PreviewActivity
 import com.example.firedatabase_assis.R
 import com.example.firedatabase_assis.UserSession
-
+//Gallery Page that shows all of the user photos
 class GalleryActivity : AppCompatActivity() {
 
     private lateinit var imageList: ArrayList<Uri>
