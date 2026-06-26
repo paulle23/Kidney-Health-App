@@ -15,6 +15,7 @@ import android.os.*
 import android.provider.MediaStore
 import android.util.Log
 import android.util.Size
+import android.util.SparseIntArray
 import android.view.Surface
 import android.view.TextureView
 import android.widget.Button
@@ -23,43 +24,64 @@ import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
+import android.view.OrientationEventListener
 
+/*Camera Screen with Manual Focus
+* Opens the camera
+* Shows live preview on screen through TextureView
+* Captures image and saves to gallery
+* TextureView → SurfaceTexture
+        ↓
+CameraDevice
+        ↓
+CaptureSession
+        ↓
+Preview (repeating request)
+        ↓
+ImageReader (captures JPEG)
+        ↓
+MediaStore (saves image)*/
 class welcome_window : AppCompatActivity() {
-
+    /*lateinit keeps property from being initialized until later, avoid initializing a property when an object is constructed.
+    If property is referenced before being initialized, UninitializedPropertyAccessException.*/
     private lateinit var textureView: TextureView
     private lateinit var cameraManager: CameraManager
-    private lateinit var cameraDevice: CameraDevice
-    private lateinit var session: CameraCaptureSession
-    private lateinit var previewRequest: CaptureRequest.Builder
-
-    private lateinit var imageReader: ImageReader
+    private lateinit var cameraDevice: CameraDevice//camera
+    private lateinit var session: CameraCaptureSession//preview and capture requests
+    private lateinit var previewRequest: CaptureRequest.Builder//settings for camera like focus, exposure
+    private lateinit var imageReader: ImageReader//receives captured JPEG images
     private lateinit var cameraId: String
     private lateinit var previewSize: Size
-
-    private var backgroundThread: HandlerThread? = null
-    private var backgroundHandler: Handler? = null
-
+    private var backgroundThread: HandlerThread? = null//camera operations thread
+    private var backgroundHandler: Handler? = null//sends tasks to the thread
     private var focusDistance = 0f
     private var isCapturing = false
-
+    private val ORIENTATIONS = SparseIntArray().apply {
+        append(Surface.ROTATION_0, 90)
+        append(Surface.ROTATION_90, 0)
+        append(Surface.ROTATION_180, 270)
+        append(Surface.ROTATION_270, 180)
+    }
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_welcome_window)
 
-        textureView = findViewById(R.id.texture_view)
+        textureView = findViewById(R.id.texture_view)//shows camera preview
         cameraManager = getSystemService(Context.CAMERA_SERVICE) as CameraManager
 
-        findViewById<Button>(R.id.take_photo_btn).setOnClickListener {
+        findViewById<Button>(R.id.take_photo_btn).setOnClickListener {//button to take photo
             capturePhoto()
         }
 
-        findViewById<SeekBar>(R.id.seekBar).setOnSeekBarChangeListener(
+        findViewById<SeekBar>(R.id.seekBar).setOnSeekBarChangeListener(//R.id.id from the activity_main layout
             object : SeekBar.OnSeekBarChangeListener {
-
+            /*reads cameras minimum focus distance, converts slider to focus distance, and updates preview focus in real time
+            * Higher = closer, lower = farther*/
                 override fun onProgressChanged(seekBar: SeekBar, progress: Int, fromUser: Boolean) {
                     if (!::previewRequest.isInitialized) return
 
                     val characteristics = cameraManager.getCameraCharacteristics(cameraId)
+                    //minimum focus distance
                     val minFocus = characteristics.get(CameraCharacteristics.LENS_INFO_MINIMUM_FOCUS_DISTANCE) ?: 0f
 
                     if (minFocus > 0f) {
@@ -90,7 +112,7 @@ class welcome_window : AppCompatActivity() {
     private fun openCamera() {
         if (ActivityCompat.checkSelfPermission(
                 this,
-                Manifest.permission.CAMERA
+                Manifest.permission.CAMERA//if not granted, then request permission
             ) != PackageManager.PERMISSION_GRANTED
         ) {
             // TODO: Consider calling
@@ -102,23 +124,27 @@ class welcome_window : AppCompatActivity() {
             // for ActivityCompat#requestPermissions for more details.
             return
         }
+        //Turns the camera on
         cameraManager.openCamera(cameraId, stateCallback, backgroundHandler)
     }
 
     private fun setupCamera() {
-        for (id in cameraManager.cameraIdList) {
+        for (id in cameraManager.cameraIdList) {//loops through all the cameras
             val chars = cameraManager.getCameraCharacteristics(id)
 
             if (chars.get(CameraCharacteristics.LENS_FACING) ==
                 CameraCharacteristics.LENS_FACING_FRONT
-            ) continue
+            ) continue//skips front facing, only selects rear facing
 
             val map = chars.get(CameraCharacteristics.SCALER_STREAM_CONFIGURATION_MAP) ?: continue
 
             cameraId = id
+            //picks largest resolution available
             previewSize = map.getOutputSizes(SurfaceTexture::class.java).maxByOrNull { it.width * it.height }!!
 
-            val jpegSize = map.getOutputSizes(ImageFormat.JPEG).maxByOrNull { it.width * it.height }
+            val jpegSizes = map.getOutputSizes(ImageFormat.JPEG)
+            val jpegSize = jpegSizes?.maxByOrNull { it.width * it.height }
+                ?: previewSize
 
             if (jpegSize != null) {
                 imageReader = ImageReader.newInstance(
@@ -126,18 +152,23 @@ class welcome_window : AppCompatActivity() {
                     jpegSize.height,
                     ImageFormat.JPEG,
                     2
-                )
+                )//this is where captured images go
             }
 
+            /*Get image buffer
+            * convert to byte array
+            * save to gallery
+            * show Toast that says "saved"*/
             imageReader.setOnImageAvailableListener({ reader ->
                 val image = reader.acquireLatestImage() ?: return@setOnImageAvailableListener
-
-                val buffer = image.planes[0].buffer
-                val bytes = ByteArray(buffer.remaining())
-                buffer.get(bytes)
-                image.close()
-
-                saveToGallery(bytes)
+                try {
+                    val buffer = image.planes[0].buffer
+                    val bytes = ByteArray(buffer.remaining())
+                    buffer.get(bytes)
+                    saveToGallery(bytes)
+                } finally {
+                    image.close()
+                }
                 runOnUiThread {
                     Toast.makeText(this, "Saved", Toast.LENGTH_SHORT).show()
                 }
@@ -151,11 +182,14 @@ class welcome_window : AppCompatActivity() {
 
     // ---------------- PREVIEW ----------------
 
-    private fun createPreviewSession() {
-        val surface = Surface(textureView.surfaceTexture)
+    private fun createPreviewSession() {//live camera feed
+        val texture = textureView.surfaceTexture!!
+        texture.setDefaultBufferSize(previewSize.width, previewSize.height)
+        val surface = Surface(texture)//create surface from TextureView
 
+        //create preview request
         previewRequest = cameraDevice.createCaptureRequest(CameraDevice.TEMPLATE_PREVIEW)
-        previewRequest.addTarget(surface)
+        previewRequest.addTarget(surface)//attach surface
 
         cameraDevice.createCaptureSession(
             listOf(surface, imageReader.surface),
@@ -167,8 +201,8 @@ class welcome_window : AppCompatActivity() {
                     previewRequest.set(
                         CaptureRequest.CONTROL_AF_MODE,
                         CameraMetadata.CONTROL_AF_MODE_OFF
-                    )
-
+                    )//disable auto-focus
+                    //start live preview that continuously streams camera frames
                     session.setRepeatingRequest(previewRequest.build(), null, backgroundHandler)
                 }
 
@@ -179,27 +213,40 @@ class welcome_window : AppCompatActivity() {
     }
 
     private fun updatePreview() {
+        if (!::session.isInitialized || !::previewRequest.isInitialized) return
         session.setRepeatingRequest(previewRequest.build(), null, backgroundHandler)
     }
 
     // ---------------- CAPTURE ----------------
-
     private fun capturePhoto() {
+        if (!::session.isInitialized) return
         if (isCapturing || !::cameraDevice.isInitialized) return
         isCapturing = true
 
+        val rotation = windowManager.defaultDisplay.rotation
+        //build still capture request
         val request = cameraDevice.createCaptureRequest(CameraDevice.TEMPLATE_STILL_CAPTURE)
-
+        //set output target
         request.addTarget(imageReader.surface)
+        //set focus
         request.set(CaptureRequest.LENS_FOCUS_DISTANCE, focusDistance)
-
-        session.capture(request.build(), object : CameraCaptureSession.CaptureCallback() {}, backgroundHandler)
+        //fix image rotation
+        request.set(
+            CaptureRequest.JPEG_ORIENTATION,
+            ORIENTATIONS.get(rotation)
+        )
+        //capture the image once
+        session.capture(
+            request.build(),
+            object : CameraCaptureSession.CaptureCallback() {},
+            backgroundHandler
+        )
     }
 
     // ---------------- BACKGROUND THREAD ----------------
 
     private fun startThread() {
-        backgroundThread = HandlerThread("camera").apply { start() }
+        backgroundThread = HandlerThread("camera").apply { start() }//Camera2 does not run on main ui thread
         backgroundHandler = Handler(backgroundThread!!.looper)
     }
 
@@ -212,23 +259,30 @@ class welcome_window : AppCompatActivity() {
 
     // ---------------- LIFECYCLE ----------------
 
-    override fun onResume() {
+    override fun onResume() {//start camera thread and attach texture listener
         super.onResume()
         startThread()
+        textureView.surfaceTextureListener = surfaceListener
+    }
+    override fun onRequestPermissionsResult(//callback for result on requesting permissions
+        requestCode: Int,
+        permissions: Array<out String>,
+        grantResults: IntArray
+    ) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
 
-        if (textureView.isAvailable) {
-            openCamera()
-        } else {
+        if (requestCode == 1 && grantResults.isNotEmpty()
+            && grantResults[0] == PackageManager.PERMISSION_GRANTED
+        ) {
             textureView.surfaceTextureListener = surfaceListener
         }
     }
-
-    override fun onPause() {
+    override fun onPause() {//close camera and stop background thread
         super.onPause()
 
-        session.close()
-        cameraDevice.close()
-        imageReader.close()
+        if (::session.isInitialized) session.close()
+        if (::cameraDevice.isInitialized) cameraDevice.close()
+        if (::imageReader.isInitialized) imageReader.close()
 
         stopThread()
     }
@@ -240,7 +294,7 @@ class welcome_window : AppCompatActivity() {
         override fun onSurfaceTextureAvailable(surface: SurfaceTexture, w: Int, h: Int) {
             setupCamera()
             openCamera()
-        }
+        }/*when preview surface/ui is ready, setup and open the camera*/
 
         override fun onSurfaceTextureSizeChanged(surface: SurfaceTexture, w: Int, h: Int) {}
         override fun onSurfaceTextureDestroyed(surface: SurfaceTexture) = true
@@ -251,9 +305,9 @@ class welcome_window : AppCompatActivity() {
 
     private val stateCallback = object : CameraDevice.StateCallback() {
 
-        override fun onOpened(camera: CameraDevice) {
+        override fun onOpened(camera: CameraDevice) {//when camera opens
             cameraDevice = camera
-            createPreviewSession()
+            createPreviewSession()//start the preview
         }
 
         override fun onDisconnected(camera: CameraDevice) {
@@ -273,7 +327,10 @@ class welcome_window : AppCompatActivity() {
             put(MediaStore.Images.Media.MIME_TYPE, "image/jpeg")
             put(MediaStore.Images.Media.RELATIVE_PATH, "Pictures/MyCameraApp")
         }
-
+        /*create metadata (name, type, folder)
+        * insert into MediaStore
+        * write JPEG bytes into output stream
+        * appears in Pictures/MyCameraApp*/
         val uri = contentResolver.insert(
             MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
             values
