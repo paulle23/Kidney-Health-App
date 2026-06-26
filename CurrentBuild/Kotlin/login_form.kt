@@ -38,6 +38,7 @@ class login_form : AppCompatActivity() {//extends base compatability class of An
                 //startActivity(Intent(this,results::class.java).putExtra("name",name))
                 UserSession.name = name
                 UserSession.username = username
+                UserSession.password = pswd
                 UserSession.email = email
                 UserSession.demographic = demographic
                 startActivity(intent)//start the next activity in results
