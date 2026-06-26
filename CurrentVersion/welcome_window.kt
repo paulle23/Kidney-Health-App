@@ -3,13 +3,11 @@ package com.example.firedatabase_assis
 import android.Manifest
 import android.annotation.SuppressLint
 import android.app.Activity
+import android.content.ContentValues
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
-import android.graphics.Bitmap
-import android.graphics.ImageFormat
-import android.graphics.Rect
-import android.graphics.SurfaceTexture
+import android.graphics.*
 import android.hardware.camera2.*
 import android.hardware.camera2.params.StreamConfigurationMap
 import android.media.Image
@@ -33,7 +31,10 @@ import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import java.io.ByteArrayOutputStream
 import java.io.File
+import java.io.FileOutputStream
+import java.nio.file.Files.createFile
 import java.text.SimpleDateFormat
+import kotlin.math.abs
 import java.util.*
 val TAG = welcome_window::class.simpleName
 const val CAMERA_REQUEST_RESULT = 1
@@ -52,6 +53,9 @@ class welcome_window : AppCompatActivity() {
     private lateinit var imageReader: ImageReader
     private lateinit var previewSize: Size
     private var shouldProceedWithOnResume: Boolean = true
+    private var currentFocusDistance = 0f
+    private var isCapturing = false
+    private lateinit var previewRequestBuilder: CaptureRequest.Builder
     private var orientations : SparseIntArray = SparseIntArray(4).apply {
         append(Surface.ROTATION_0, 0)
         append(Surface.ROTATION_90, 90)
@@ -59,8 +63,7 @@ class welcome_window : AppCompatActivity() {
         append(Surface.ROTATION_270, 270)
     }
     //added august
-    var dbSq: DB_class= DB_class(this);
-    //
+    private lateinit var dbSq: DB_class
     //private lateinit var mCameraCharacteristics: CameraCharacteristics//added
     //private val Seekbar
     // focusSeekbar;
@@ -68,9 +71,10 @@ class welcome_window : AppCompatActivity() {
     //checking for focus, turn on autofocus, af trigger,
     //states to transition - inactive -> active scan -> focused locked
     private fun updatePreview() {
+        if (!::cameraCaptureSession.isInitialized) return
         try {
             cameraCaptureSession.setRepeatingRequest(
-                captureRequestBuilder.build(),
+                previewRequestBuilder.build(),
                 null,
                 backgroundHandler
             )
@@ -84,6 +88,7 @@ class welcome_window : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_welcome_window)
+        dbSq = DB_class(this)
         textureView = findViewById(R.id.texture_view)
         cameraManager = getSystemService(Context.CAMERA_SERVICE) as CameraManager
         //possibly here, need first id  CameraCharacteristics characteristics = manager.getCameraCharacteristics(cameraId);
@@ -92,33 +97,55 @@ class welcome_window : AppCompatActivity() {
                 takePhoto()
             }
         }
-        /*findViewById<Button>(R.id.seekBar).apply {
-            setOnClickListener {
-                changeFocus()
-            }
-        }*/
         val seek = findViewById<SeekBar>(R.id.seekBar)//R.id.id from the activity_main layout
         seek?.setOnSeekBarChangeListener(object :
             SeekBar.OnSeekBarChangeListener {
             override fun onStartTrackingTouch(seek: SeekBar) {
-                captureRequestBuilder.set(CaptureRequest.CONTROL_AF_MODE, CameraMetadata.CONTROL_AF_MODE_OFF)
+                previewRequestBuilder.set(CaptureRequest.CONTROL_AF_MODE, CameraMetadata.CONTROL_AF_MODE_OFF)
             }
             override fun onProgressChanged(seek: SeekBar,
                                            progress: Int, fromUser: Boolean) {
                 val manager = getSystemService(CAMERA_SERVICE) as CameraManager
+                if (!::cameraDevice.isInitialized) return
                 val characteristics = manager.getCameraCharacteristics(cameraDevice.id)
                 val minimumLens =
-                    characteristics.get(CameraCharacteristics.LENS_INFO_MINIMUM_FOCUS_DISTANCE)!!
-                val num = progress.toFloat() * minimumLens / 100
-                captureRequestBuilder.set(CaptureRequest.LENS_FOCUS_DISTANCE, num)
+                    characteristics.get(
+                        CameraCharacteristics.LENS_INFO_MINIMUM_FOCUS_DISTANCE
+                    ) ?: 0f
+                if (minimumLens == 0f) {
+                    // Fixed-focus camera
+                }
+                if (minimumLens > 0f) {
+                    val focus = minimumLens * (1f - seek.progress / 100f)
+                    previewRequestBuilder.set(
+                        CaptureRequest.LENS_FOCUS_DISTANCE,
+                        focus
+                    )
+                }
+                /*val num = progress.toFloat() * minimumLens / 100
+                captureRequestBuilder.set(CaptureRequest.LENS_FOCUS_DISTANCE, num)*/
                 //num changes with progress bar and minimumLens is 10.0
                 updatePreview()
             }
             override fun onStopTrackingTouch(seek: SeekBar) {
                 val manager = getSystemService(CAMERA_SERVICE) as CameraManager
+                if (!::cameraDevice.isInitialized) return
                 val characteristics = manager.getCameraCharacteristics(cameraDevice.id)
                 val minimumLens =
-                    characteristics.get(CameraCharacteristics.LENS_INFO_MINIMUM_FOCUS_DISTANCE)!!
+                    characteristics.get(
+                        CameraCharacteristics.LENS_INFO_MINIMUM_FOCUS_DISTANCE
+                    ) ?: 0f
+                if (minimumLens == 0f) {
+                    // Fixed-focus camera
+                }
+                if (minimumLens > 0f) {
+                    val focus = minimumLens * (1f - seek.progress / 100f)
+                    currentFocusDistance = focus
+                    previewRequestBuilder.set(
+                        CaptureRequest.LENS_FOCUS_DISTANCE,
+                        focus
+                    )
+                }
                 val num = seek.progress.toFloat() * minimumLens / 100
                 Toast.makeText(this@welcome_window,
                     "Focus is: " + num,
@@ -128,48 +155,80 @@ class welcome_window : AppCompatActivity() {
         if (!wasCameraPermissionWasGiven()) {
             requestPermissions(arrayOf(Manifest.permission.CAMERA), CAMERA_REQUEST_RESULT)
         }
-        startBackgroundThread()
     }
-    /*fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) {
-        progressChangedValue = progress
-        val manager = getSystemService(CAMERA_SERVICE) as CameraManager
-        val characteristics = manager.getCameraCharacteristics(cameraDevice.id)
-        val minimumLens =
-            characteristics.get(CameraCharacteristics.LENS_INFO_MINIMUM_FOCUS_DISTANCE)!!
-        val num = progress.toFloat() * minimumLens / 100
-        previewBuilder.set(CaptureRequest.LENS_FOCUS_DISTANCE, num)
-    }*/
     //when activity is about to be moved to foreground
     @SuppressLint("MissingPermission")
     override fun onResume() {
         super.onResume()
         startBackgroundThread()
-        if (textureView.isAvailable && shouldProceedWithOnResume) {
-            setupCamera()
-        } else if (!textureView.isAvailable){
+        if (textureView.isAvailable) {
+            surfaceTextureListener.onSurfaceTextureAvailable(
+                textureView.surfaceTexture!!,
+                textureView.width,
+                textureView.height
+            )
+        } else {
             textureView.surfaceTextureListener = surfaceTextureListener
         }
-        shouldProceedWithOnResume = !shouldProceedWithOnResume
     }
-    private fun setupCamera() {
-        val cameraIds: Array<String> = cameraManager.cameraIdList
-        for (id in cameraIds) {
-            val cameraCharacteristics = cameraManager.getCameraCharacteristics(id)
-            //If we want to choose the rear facing camera instead of the front facing one
-            if (cameraCharacteristics.get(CameraCharacteristics.LENS_FACING) == CameraCharacteristics.LENS_FACING_FRONT) {
-                continue
-            }
-            val streamConfigurationMap : StreamConfigurationMap? = cameraCharacteristics.get(CameraCharacteristics.SCALER_STREAM_CONFIGURATION_MAP)
-            if (streamConfigurationMap != null) {
-                previewSize = cameraCharacteristics.get(CameraCharacteristics.SCALER_STREAM_CONFIGURATION_MAP)!!.getOutputSizes(ImageFormat.JPEG).maxByOrNull { it.height * it.width }!!
-                //videoSize = cameraCharacteristics.get(CameraCharacteristics.SCALER_STREAM_CONFIGURATION_MAP)!!.getOutputSizes(MediaRecorder::class.java).maxByOrNull { it.height * it.width }!!
-                imageReader = ImageReader.newInstance(previewSize.width, previewSize.height, ImageFormat.JPEG, 1)
-                imageReader.setOnImageAvailableListener(onImageAvailableListener, backgroundHandler)
-            }
-            cameraId = id
+    override fun onPause() {
+        super.onPause()
+        stopBackgroundThread()
+        if (::cameraCaptureSession.isInitialized) {
+            cameraCaptureSession.close()
+        }
+        if (::cameraDevice.isInitialized) {
+            cameraDevice.close()
+        }
+        if (::imageReader.isInitialized) {
+            imageReader.close()
         }
     }
-
+    override fun onDestroy() {
+        super.onDestroy()
+    }
+    private fun setupCamera(viewWidth: Int, viewHeight: Int) {
+        val cameraIds = cameraManager.cameraIdList
+        for (id in cameraIds) {
+            val chars = cameraManager.getCameraCharacteristics(id)
+            if (chars.get(CameraCharacteristics.LENS_FACING)
+                == CameraCharacteristics.LENS_FACING_FRONT
+            ) continue
+            val map = chars.get(
+                CameraCharacteristics.SCALER_STREAM_CONFIGURATION_MAP
+            ) ?: continue
+            cameraId = id
+            /*previewSize = chooseOptimalSize(
+                map.getOutputSizes(SurfaceTexture::class.java),
+                viewWidth,
+                viewHeight
+            )*/
+            val textureRatio = viewWidth.toFloat() / viewHeight
+            previewSize = map.getOutputSizes(SurfaceTexture::class.java)
+                .filter {
+                    abs((it.width.toFloat() / it.height) - textureRatio) < 0.1
+                }
+                .minByOrNull {
+                    abs(it.width * it.height - viewWidth * viewHeight)
+                }
+                ?: map.getOutputSizes(SurfaceTexture::class.java)[0]
+            val largest = map.getOutputSizes(ImageFormat.JPEG)
+                .maxByOrNull { it.width * it.height }!!
+            imageReader = ImageReader.newInstance(
+                largest.width,
+                largest.height,
+                ImageFormat.JPEG,
+                3
+            )
+            imageReader.setOnImageAvailableListener(
+                onImageAvailableListener,
+                backgroundHandler
+            )
+            require(::cameraId.isInitialized) { "cameraId not set" }
+            require(::previewSize.isInitialized) { "previewSize not set" }
+            break
+        }
+    }
     private fun wasCameraPermissionWasGiven() : Boolean {
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED)
         {
@@ -177,7 +236,6 @@ class welcome_window : AppCompatActivity() {
         }
         return false
     }
-
     //callback for result on requesting permissions
     override fun onRequestPermissionsResult(
         requestCode: Int,
@@ -186,7 +244,10 @@ class welcome_window : AppCompatActivity() {
     ) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED) {
-            surfaceTextureListener.onSurfaceTextureAvailable(textureView.surfaceTexture!!, textureView.width, textureView.height)
+            //surfaceTextureListener.onSurfaceTextureAvailable(textureView.surfaceTexture!!, textureView.width, textureView.height)
+            textureView.surfaceTexture?.let {
+                surfaceTextureListener.onSurfaceTextureAvailable(it, textureView.width, textureView.height)
+            }
         } else {
             Toast.makeText(
                 this,
@@ -205,133 +266,158 @@ class welcome_window : AppCompatActivity() {
             }
         }
     }
-    /*private class MySeekBarListener : SeekBar.OnSeekBarChangeListener {
-        override fun onProgressChanged(seek: SeekBar,
-                                       progress: Int, fromUser: Boolean) {
-            val manager = ContextCompat.getSystemService(CAMERA_SERVICE) as CameraManager
-            val characteristics = manager.getCameraCharacteristics(cameraDevice.id)
-            val minimumLens =
-                characteristics.get(CameraCharacteristics.LENS_INFO_MINIMUM_FOCUS_DISTANCE)!!
-            val num = progress.toFloat() * minimumLens / 100
-            captureRequestBuilder.set(CaptureRequest.LENS_FOCUS_DISTANCE, num)
+    private fun chooseOptimalSize(
+        sizes: Array<Size>,
+        viewWidth: Int,
+        viewHeight: Int
+    ): Size {
+        val targetRatio = viewWidth.toFloat() / viewHeight
+        return sizes
+            .filter {
+                val ratio = it.width.toFloat() / it.height.toFloat()
+                kotlin.math.abs(ratio - targetRatio) < 0.2
+            }
+            .minByOrNull {
+                abs(it.width * it.height - viewWidth * viewHeight)
+            }
+            ?: sizes.maxByOrNull { it.width * it.height }!!
+    }
+    private fun configureTransform(viewWidth: Int, viewHeight: Int) {
+        val rotation = windowManager.defaultDisplay.rotation
+        val matrix = Matrix()
+        val viewRect = RectF(0f, 0f, viewWidth.toFloat(), viewHeight.toFloat())
+        val bufferRect = RectF(
+            0f, 0f,
+            previewSize.width.toFloat(),
+            previewSize.height.toFloat()
+        )
+        val centerX = viewRect.centerX()
+        val centerY = viewRect.centerY()
+        val swap = rotation == Surface.ROTATION_90 || rotation == Surface.ROTATION_270
+        val rotatedBuffer = if (swap) {
+            RectF(0f, 0f, bufferRect.height(), bufferRect.width())
+        } else {
+            bufferRect
         }
-        //updatePreview()
+        matrix.setRectToRect(viewRect, rotatedBuffer, Matrix.ScaleToFit.FILL)
+        matrix.postScale(1f, 1f, centerX, centerY)
+        matrix.postRotate((90 * rotation).toFloat(), centerX, centerY)
+        textureView.setTransform(matrix)
     }
-
-    override fun onStartTrackingTouch(seekBar: SeekBar) {
+    private fun getJpegOrientation(//rotation of preview
+        rotation: Int,
+        sensorOrientation: Int
+    ): Int {
+        val deviceRotation = when (rotation) {
+            Surface.ROTATION_0 -> 0
+            Surface.ROTATION_90 -> 90
+            Surface.ROTATION_180 -> 180
+            Surface.ROTATION_270 -> 270
+            else -> 0
+        }
+        return (sensorOrientation + deviceRotation) % 360
     }
-
-    override fun onStopTrackingTouch(seekBar: SeekBar) {
-    }
-}
-    private fun changeFocus() {
-        val seek = findViewById<SeekBar>(R.id.seekBar)//R.id.id from the activity_main layout
-        seek?.setOnSeekBarChangeListener(object :
-            SeekBar.OnSeekBarChangeListener {
-            override fun onStartTrackingTouch(seek: SeekBar) {
-                captureRequestBuilder.set(CaptureRequest.CONTROL_AF_MODE, CameraMetadata.CONTROL_AF_MODE_OFF);
-            }
-            override fun onProgressChanged(seek: SeekBar,
-                                           progress: Int, fromUser: Boolean) {
-                /*val cameraIds: Array<String> = cameraManager.cameraIdList
-
-                /*for (id in cameraIds) {
-                    val cameraCharacteristics = cameraManager.getCameraCharacteristics(id)*/
-                val characteristics: CameraCharacteristics =
-                    cameraManager.getCameraCharacteristics(cameraId)
-                    val minimumLens: Float =
-                        mCameraCharacteristics.get(CameraCharacteristics.LENS_INFO_MINIMUM_FOCUS_DISTANCE)//likely 0
-                    val num = Int as Float * minimumLens / 100
-                    val num = progress.toFloat() * minimumLens / 100
-                    captureRequestBuilder.set(CaptureRequest.LENS_FOCUS_DISTANCE, num)*/
-                //}
-                val manager = getSystemService(CAMERA_SERVICE) as CameraManager
-                val characteristics = manager.getCameraCharacteristics(cameraDevice.id)
-                val minimumLens =
-                    characteristics.get(CameraCharacteristics.LENS_INFO_MINIMUM_FOCUS_DISTANCE)!!
-                val num = progress.toFloat() * minimumLens / 100
-                captureRequestBuilder.set(CaptureRequest.LENS_FOCUS_DISTANCE, num)
-                /*Toast.makeText(this@MainActivity,
-                    "Focus is: " + num + " and minimum lens is " + minimumLens,
-                    Toast.LENGTH_SHORT).show()*/
-                //num changes with progress bar and minimumLens is 10.0
-            }
-
-            override fun onStopTrackingTouch(seek: SeekBar) {
-                // what happens when progress is stopped
-                captureRequestBuilder.set(CaptureRequest.CONTROL_AF_MODE, CameraMetadata.CONTROL_AF_MODE_OFF)
-                Toast.makeText(this@MainActivity,
-                    "Progress is: " + seek.progress + "%",
-                    Toast.LENGTH_SHORT).show()
-            }
-        })
-
-    }*/
     //take the photo, goes to onCaptureCompleted after
     private fun takePhoto() {
-        captureRequestBuilder = cameraDevice.createCaptureRequest(CameraDevice.TEMPLATE_STILL_CAPTURE)
-        captureRequestBuilder.addTarget(imageReader.surface)
+        if (isCapturing) return
+        isCapturing = true
+        Log.d("Camera", "takePhoto()")
+        if (!::cameraDevice.isInitialized) {
+            isCapturing = false
+            return
+        }//first check if the camera is ready
+        //cameraCaptureSession.stopRepeating()
+        val stillBuilder =
+            cameraDevice.createCaptureRequest(CameraDevice.TEMPLATE_STILL_CAPTURE)
+        stillBuilder.set(
+            CaptureRequest.CONTROL_AF_MODE,
+            CameraMetadata.CONTROL_AF_MODE_OFF
+        )
+        stillBuilder.set(
+            CaptureRequest.LENS_FOCUS_DISTANCE,
+            currentFocusDistance
+        )
+        stillBuilder.addTarget(imageReader.surface)
+        //display?.rotation ?: Surface.ROTATION_0 instead of the next line since it is deprecated?
+        val characteristics = cameraManager.getCameraCharacteristics(cameraDevice.id)
+        val sensorOrientation =
+            characteristics.get(CameraCharacteristics.SENSOR_ORIENTATION) ?: 0
+        //captureRequestBuilder.set(CaptureRequest.JPEG_ORIENTATION, orientations.get(rotation))
         val rotation = windowManager.defaultDisplay.rotation
-        captureRequestBuilder.set(CaptureRequest.JPEG_ORIENTATION, orientations.get(rotation))
+        val jpegOrientation = getJpegOrientation(rotation, sensorOrientation)
+        stillBuilder.set(
+            CaptureRequest.JPEG_ORIENTATION,
+            jpegOrientation
+        )
         val rect = Rect(1000, 1100, 2772, 2472)
-        captureRequestBuilder.set(CaptureRequest.SCALER_CROP_REGION, rect);
-        cameraCaptureSession.capture(captureRequestBuilder.build(), captureCallback, null)
-
+        val activeArraySize = characteristics.get(CameraCharacteristics.SENSOR_INFO_ACTIVE_ARRAY_SIZE)
+        //stillBuilder.set(CaptureRequest.SCALER_CROP_REGION, activeArraySize);
+        cameraCaptureSession.capture(stillBuilder.build(), captureCallback, backgroundHandler)
+        /*try {
+            cameraCaptureSession.stopRepeating()
+        } catch (e: Exception) {
+            Log.e("Camera", "stopRepeating failed", e)
+        }*/
     }
-
     //connect camera
     @SuppressLint("MissingPermission")
     private fun connectCamera() {
         cameraManager.openCamera(cameraId, cameraStateCallback, backgroundHandler)
     }
-
     /**
      * Surface Texture Listener
      */
-
     private val surfaceTextureListener = object : TextureView.SurfaceTextureListener {
         @SuppressLint("MissingPermission")
         override fun onSurfaceTextureAvailable(texture: SurfaceTexture, width: Int, height: Int) {
-            if (wasCameraPermissionWasGiven()) {
-                setupCamera()
-                connectCamera()
-            }
+            if (!wasCameraPermissionWasGiven()) return
+            setupCamera(width, height)
+            //configureTransform(width, height)
+            connectCamera()
         }
-
         override fun onSurfaceTextureSizeChanged(texture: SurfaceTexture, width: Int, height: Int) {
-
+            configureTransform(width, height)
         }
-
         override fun onSurfaceTextureDestroyed(texture: SurfaceTexture): Boolean {
             return true
         }
-
         override fun onSurfaceTextureUpdated(texture: SurfaceTexture) {
 
         }
     }
-
     /**
      * Camera State Callbacks
      */
-
     private val cameraStateCallback = object : CameraDevice.StateCallback() {
         override fun onOpened(camera: CameraDevice) {
             cameraDevice = camera
-            val surfaceTexture : SurfaceTexture? = textureView.surfaceTexture
-            surfaceTexture?.setDefaultBufferSize(previewSize.width, previewSize.height)
-            val previewSurface: Surface = Surface(surfaceTexture)
 
-            captureRequestBuilder = cameraDevice.createCaptureRequest(CameraDevice.TEMPLATE_PREVIEW)
-            captureRequestBuilder.addTarget(previewSurface)
+            val surfaceTexture = textureView.surfaceTexture ?: return
 
-            cameraDevice.createCaptureSession(listOf(previewSurface, imageReader.surface), captureStateCallback, null)
+            val rotation = windowManager.defaultDisplay.rotation
+            val swapped = rotation == Surface.ROTATION_90 || rotation == Surface.ROTATION_270
+
+            val width = if (swapped) previewSize.height else previewSize.width
+            val height = if (swapped) previewSize.width else previewSize.height
+
+            surfaceTexture.setDefaultBufferSize(width, height)
+
+            val previewSurface = Surface(surfaceTexture)
+
+            previewRequestBuilder =
+                cameraDevice.createCaptureRequest(CameraDevice.TEMPLATE_PREVIEW)
+
+            previewRequestBuilder.addTarget(previewSurface)
+
+            cameraDevice.createCaptureSession(
+                listOf(previewSurface, imageReader.surface),
+                captureStateCallback,
+                backgroundHandler
+            )
         }
-
-        override fun onDisconnected(cameraDevice: CameraDevice) {
-
+        override fun onDisconnected(camera: CameraDevice) {
+            camera.close()
         }
-
         override fun onError(cameraDevice: CameraDevice, error: Int) {
             val errorMsg = when(error) {
                 ERROR_CAMERA_DEVICE -> "Fatal (device)"
@@ -344,123 +430,55 @@ class welcome_window : AppCompatActivity() {
             Log.e(TAG, "Error when trying to connect camera $errorMsg")
         }
     }
-
     /**
      * Background Thread
      */
     private fun startBackgroundThread() {
-        backgroundHandlerThread = HandlerThread("CameraVideoThread")
+        if (::backgroundHandlerThread.isInitialized) return
+        backgroundHandlerThread = HandlerThread("CameraThread")
         backgroundHandlerThread.start()
         backgroundHandler = Handler(backgroundHandlerThread.looper)
     }
-
     private fun stopBackgroundThread() {
-        backgroundHandlerThread.quitSafely()
-        backgroundHandlerThread.join()
+        if (::backgroundHandlerThread.isInitialized) {
+            backgroundHandlerThread.quitSafely()
+            backgroundHandlerThread.join()
+        }
     }
-
     /**
      * Capture State Callback
      * A callback object for receiving updates about the state of a camera capture session.
      */
-
     private val captureStateCallback = object : CameraCaptureSession.StateCallback() {
-        override fun onConfigureFailed(session: CameraCaptureSession) {
-
-        }
         override fun onConfigured(session: CameraCaptureSession) {
+            Log.d("CAMERA", "SESSION CONFIGURED")
+
             cameraCaptureSession = session
-            captureRequestBuilder.set(CaptureRequest.CONTROL_AF_MODE, CameraMetadata.CONTROL_AF_MODE_OFF)//good
-            /*launch{
-                val result = loops()
-                onresult(result)
-           }*/
-            //captureRequestBuilder.set(CaptureRequest.LENS_FOCUS_DISTANCE, 0f);//this sets the different focus levels, 0 is for far, 10 is for close
-            //figure out how to change it while the app is running
-            cameraCaptureSession.setRepeatingRequest(//use new bundle after changes to update captureRequestBuilder
-                captureRequestBuilder.build(),
+
+            previewRequestBuilder.set(
+                CaptureRequest.CONTROL_AF_MODE,
+                CameraMetadata.CONTROL_AF_MODE_OFF
+            )
+
+            cameraCaptureSession.setRepeatingRequest(
+                previewRequestBuilder.build(),
                 null,
                 backgroundHandler
             )
         }
-    }/*
-suspend fun loops(): Float{
-    for (i in 0..10) {
-        val num = i.toFloat()
-        captureRequestBuilder.set(CaptureRequest.LENS_FOCUS_DISTANCE, num)
-        delay(2000)
-    }
-}
-    fun onresult(num: Float){
 
-    }*/
-    /*private val captureStateVideoCallback = object : CameraCaptureSession.StateCallback() {
         override fun onConfigureFailed(session: CameraCaptureSession) {
-            Log.e(TAG, "Configuration failed")
+            Log.e("CAMERA", "SESSION FAILED ❌")
         }
-        override fun onConfigured(session: CameraCaptureSession) {
-            cameraCaptureSession = session
-            captureRequestBuilder.set(CaptureRequest.CONTROL_AF_MODE, CaptureResult.CONTROL_AF_MODE_CONTINUOUS_VIDEO)
-            try {
-                cameraCaptureSession.setRepeatingRequest(
-                    captureRequestBuilder.build(), null,
-                    backgroundHandler
-                )
-                mediaRecorder.start()
-            } catch (e: CameraAccessException) {
-                e.printStackTrace()
-                Log.e(TAG, "Failed to start camera preview because it couldn't access the camera")
-            } catch (e: IllegalStateException) {
-                e.printStackTrace()
-            }
-
-        }
-    }*/
-    /*private CameraCaptureSession.CaptureCallback mCaptureCallback
-    = new CameraCaptureSession.CaptureCallback() {}*/
-    /*private fun process(result: CaptureResult) {
-        when (mState) {
-            STATE_PREVIEW -> {
-                val afState = result.get(CaptureResult.CONTROL_AF_STATE)!!
-                if (CaptureResult.CONTROL_AF_TRIGGER_START == afState) {
-                    if (areWeFocused) {
-                        //Run specific task here
-                    }
-                }
-                if (CaptureResult.CONTROL_AF_STATE_PASSIVE_FOCUSED == afState) {
-                    areWeFocused = true
-                } else {
-                    areWeFocused = false
-                }
-            }
-        }
-    }*/
+    }
     /**Capture Callback*/
     private val captureCallback = object : CameraCaptureSession.CaptureCallback() {
-        /*private fun process(result: CaptureResult) {
-            when (mState) {
-                STATE_PREVIEW -> {
-                    val afState = result.get(CaptureResult.CONTROL_AF_STATE)!!
-                    if (CaptureResult.CONTROL_AF_TRIGGER_START == afState) {
-                        if (areWeFocused) {
-                            //Run specific task here
-                        }
-                    }
-                    if (CaptureResult.CONTROL_AF_STATE_PASSIVE_FOCUSED == afState) {
-                        areWeFocused = true
-                    } else {
-                        areWeFocused = false
-                    }
-                }
-            }
-        }*/
         override fun onCaptureStarted(
             session: CameraCaptureSession,
             request: CaptureRequest,
             timestamp: Long,
             frameNumber: Long
         ) {}
-
         override fun onCaptureProgressed(
             session: CameraCaptureSession,
             request: CaptureRequest,
@@ -468,33 +486,86 @@ suspend fun loops(): Float{
         ) {
             //process(partialResult)
         }
-
         override fun onCaptureCompleted(
             session: CameraCaptureSession,
             request: CaptureRequest,
             result: TotalCaptureResult
         ) {
-            //process(result) process result function
+            // restart preview AFTER short delay OR safely
+            if (::cameraCaptureSession.isInitialized) {
+                cameraCaptureSession.setRepeatingRequest(
+                    previewRequestBuilder.build(),
+                    null,
+                    backgroundHandler
+                )
+            }
+        }
+        override fun onCaptureFailed(
+            session: CameraCaptureSession,
+            request: CaptureRequest,
+            failure: CaptureFailure
+        ) {
+            Log.e("Camera", "Capture failed: ${failure.reason}")
         }
     }
-
     /**
      * ImageAvailable Listener
      */
     val onImageAvailableListener = object: ImageReader.OnImageAvailableListener{
         override fun onImageAvailable(reader: ImageReader) {
-            Toast.makeText(this@welcome_window, "Photo Taken!", Toast.LENGTH_SHORT).show()
-            val image: Image = reader.acquireLatestImage()
-            image.close()
+            val image = reader.acquireLatestImage() ?: return
+            Log.d("Camera", "onImageAvailable()")
+            //to save the image and prevent it from leaking
+            val bytes = try {
+                val buffer = image.planes[0].buffer
+                ByteArray(buffer.remaining()).also {
+                    buffer.get(it)
+                }
+            } finally {
+                image.close() // MUST be immediate
+            }
+            saveImageToMediaStore(bytes)
+            runOnUiThread {
+                Toast.makeText(this@welcome_window, "Photo Saved!", Toast.LENGTH_SHORT).show()
+            }
+            isCapturing = false
         }
     }
-
     /**
      * File Creation
      */
-
-    private fun createFile(): File {
+    /*private fun createFile(): File {
         val sdf = SimpleDateFormat("yyyy_MM_dd_HH_mm_ss_SSS", Locale.US)
-        return File(filesDir, "VID_${sdf.format(Date())}.mp4")
+        return File(filesDir, "IMG_${sdf.format(Date())}.jpg")
+    }*/
+    private fun saveImageToMediaStore(bytes: ByteArray) {//uses mediastore to save in galleryinstead of private storage
+        val filename = "IMG_${System.currentTimeMillis()}.jpg"
+        val values = ContentValues().apply {
+            put(MediaStore.Images.Media.DISPLAY_NAME, filename)
+            put(MediaStore.Images.Media.MIME_TYPE, "image/jpeg")
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
+                put(
+                    MediaStore.Images.Media.RELATIVE_PATH,
+                    "Pictures/MyCameraApp"
+                )
+                put(MediaStore.Images.Media.IS_PENDING, 1)
+            }
+        }
+        val resolver = applicationContext.contentResolver
+        val uri = resolver.insert(
+            MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
+            values
+        )
+        uri?.let {
+            resolver.openOutputStream(it)?.use { output ->
+                output.write(bytes)
+                output.flush()
+            }
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
+                values.clear()
+                values.put(MediaStore.Images.Media.IS_PENDING, 0)
+                resolver.update(it, values, null, null)
+            }
+        }
     }
 }
