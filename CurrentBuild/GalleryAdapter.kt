@@ -9,6 +9,7 @@ import androidx.recyclerview.widget.RecyclerView
 import com.bumptech.glide.Glide
 import com.example.firedatabase_assis.R
 
+//Recycler Adapter to implement the gallery
 class GalleryAdapter(
     private val images: List<Uri>,
     private val onItemClick: (Uri) -> Unit
