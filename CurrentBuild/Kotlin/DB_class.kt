@@ -4,8 +4,9 @@ import android.content.Context
 import android.database.sqlite.SQLiteDatabase
 import android.database.sqlite.SQLiteOpenHelper
 //SqLiteDataBase that contains all of the user login information
+//context gives the class access to the application
 class DB_class(context: Context): SQLiteOpenHelper(context,DATABASE_NAME,null,DATABASE_VERSION) {//extends SQLiteOpenHelper
-    companion object {//column names
+    companion object {//column names, contains variables that belong to the class instead of individual object
         private val DATABASE_VERSION = 1
         private val DATABASE_NAME = "Database"
         private val TABLE_CONTACTS = "user"//also table_name
