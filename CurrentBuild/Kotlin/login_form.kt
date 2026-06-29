@@ -9,7 +9,6 @@ import android.widget.Toast
 import androidx.appcompat.app.AlertDialog
 import com.example.firedatabase_assis.databinding.ActivityLoginFormBinding
 
-
 //LOGIN SCREEN
 class login_form : AppCompatActivity() {//extends base compatability class of Android
     private lateinit var bind : ActivityLoginFormBinding //binding object to access views from XML without findViewById().
@@ -36,6 +35,7 @@ class login_form : AppCompatActivity() {//extends base compatability class of An
                 rs.close() //close cursor after database resources are released
                 //startActivity(Intent(this,welcome_window::class.java).putExtra("name",name))
                 //startActivity(Intent(this,results::class.java).putExtra("name",name))
+                //Saves the userSession so any activity can access user details
                 UserSession.name = name
                 UserSession.username = username
                 UserSession.password = pswd
@@ -43,7 +43,7 @@ class login_form : AppCompatActivity() {//extends base compatability class of An
                 UserSession.demographic = demographic
                 startActivity(intent)//start the next activity in results
             }
-            else{
+            else{//login failed
                 var ad = AlertDialog.Builder(this)
                 ad.setTitle("Message")
                 ad.setMessage("Username or password is incorrect!")
