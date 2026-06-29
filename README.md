@@ -1,11 +1,11 @@
 # Kidney-Health-App
 
 CurrentVersion
-- Android User Authentication & Camera Gallery App\
+- Android User Authentication & Camera Gallery App
 
-An Android application that integrates user authentication, session management, custom Camera2 API functionality, and a personalized image gallery system. Users can register, log in, capture images, and view their photos in a structured gallery.\
+An Android application that integrates user authentication, session management, custom Camera2 API functionality, and a personalized image gallery system. Users can register, log in, capture images, and view their photos in a structured gallery.
 
-Features\
+Features
 - User Authentication\
 User registration and login system using SQLite database\
 Secure credential validation\
@@ -20,13 +20,13 @@ Manual focus control using SeekBar\
 High-resolution image capture using ImageReader\
 Saves images directly to device storage
 - Image Storage & Gallery\
-Images saved in MediaStore\
+Images saved in MediaStore
 
 User-specific folder structure:\
 
 Pictures/MyCameraApp/<username>/\
 Gallery view using RecyclerView (GridLayoutManager)\
-Efficient image loading with Glide\
+Efficient image loading with Glide
 - Image Preview\
 Full-screen image preview using PreviewActivity\
 Smooth navigation from gallery or camera capture
@@ -86,6 +86,6 @@ OldVersion - The version of the code I submitted for my Design Project. It has t
 Overall Application starts at the Login and Register Screen\
 Once logged in, takes you to results.kt\
 From there you can click on the + on the top left to access the built in camera preview and manipulate the focus to your desire. \
-     You can also click on Gallery to see all the pictures associated with an account or logout to log out.\
+     You can also click on Gallery to see all the pictures associated with an account or logout to log out.
      
 Click the photo button, which saves the photo directly into your android phone gallery instead of inside the Android/data/com.example.firedatabase_assis/files folder\
