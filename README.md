@@ -1,13 +1,83 @@
 # Kidney-Health-App
 
-CurrentVersion is the current form of the application with the files that I have written personally for the implementation. I wrote the database, login and register screens, the camera view and functionality with the manual focus/low-level camera control, and the welcome screen. Both the XML layout files and the Kotlin backend files are written.
+:CurrentVersion
+📱 Android User Authentication & Camera Gallery App
+
+An Android application that integrates user authentication, session management, custom Camera2 API functionality, and a personalized image gallery system. Users can register, log in, capture images, and view their photos in a structured gallery.
+
 Features
-    - Login and Register Page
-    - Login Page - uses UserSession.kt to store user information throughout the different activities instead of having to use intent
-         - once you log in you are taken to the results page
-    - Results page - you can click on the + to open the camera view and take a picture, Gallery button to see all of the photos for each user, and a logout button that clears the userSession and logs out the user
-    - Welcome_window page - this is the camera view, it receives the userSession username to store the picture in a subfolder for each user, and there is manual focus. ONce you take a picture, it automatically saves the picture and takes you to PreviewActivity, which shows the most recent picture
-    - Gallery Page - stores all of the pictures for each user. You can click on each picture, which takes you to the PreviewActivity with whatever picture you chose. 
+🔐 User Authentication
+User registration and login system using SQLite database
+Secure credential validation
+Error handling for incorrect login attempts
+👤 Session Management
+Global user session using singleton (UserSession)
+Stores logged-in user details across activities
+Logout functionality with session clearing
+📷 Custom Camera (Camera2 API)
+Live camera preview using TextureView
+Manual focus control using SeekBar
+High-resolution image capture using ImageReader
+Saves images directly to device storage
+🖼 Image Storage & Gallery
+Images saved in MediaStore
+
+User-specific folder structure:
+
+Pictures/MyCameraApp/<username>/
+Gallery view using RecyclerView (GridLayoutManager)
+Efficient image loading with Glide
+🔍 Image Preview
+Full-screen image preview using PreviewActivity
+Smooth navigation from gallery or camera capture
+🧱 Tech Stack
+Kotlin
+Android SDK
+Camera2 API
+SQLite Database
+RecyclerView
+Glide
+MediaStore
+View Binding
+📱 App Flow
+App Launch
+   ↓
+Login / Register Screen
+   ↓
+Login Success
+   ↓
+Dashboard (Results)
+   ↓
+ ├── Camera (Capture Images)
+ ├── Gallery (View Images)
+ └── Logout
+📷 Camera Workflow
+Live Preview (TextureView)
+        ↓
+User adjusts focus (SeekBar)
+        ↓
+Capture Image
+        ↓
+ImageReader receives JPEG
+        ↓
+Save to MediaStore
+        ↓
+Open Preview Screen
+🖼 Gallery Workflow
+Query MediaStore
+        ↓
+Filter images by username folder
+        ↓
+Display using RecyclerView grid
+        ↓
+Click image → Open PreviewActivity
+🧠 Key Concepts Used
+Android Activity lifecycle
+Camera2 API implementation
+SQLite database operations
+Singleton pattern (session management)
+RecyclerView Adapter pattern
+MediaStore file storage system
 
 OldVersion - The version of the code I submitted for my Design Project. It has the login and register screen, login, results page, and camera view. User login info is kept through intents. 
     old_welcome_window.kt - original code for the camera screen
