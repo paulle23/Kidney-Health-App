@@ -22,7 +22,7 @@ Saves images directly to device storage
 - Image Storage & Gallery\
 Images saved in MediaStore
 
-User-specific folder structure:\
+User-specific folder structure:
 
 Pictures/MyCameraApp/<username>/\
 Gallery view using RecyclerView (GridLayoutManager)\
