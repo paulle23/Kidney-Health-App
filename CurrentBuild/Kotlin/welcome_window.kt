@@ -115,8 +115,7 @@ class welcome_window : AppCompatActivity() {
         }
     }
 
-    // ---------------- CAMERA SETUP ----------------
-
+    //CAMERA SETUP
     private fun openCamera() {
         if (ActivityCompat.checkSelfPermission(
                 this,
@@ -151,9 +150,9 @@ class welcome_window : AppCompatActivity() {
             previewSize = map.getOutputSizes(SurfaceTexture::class.java).maxByOrNull { it.width * it.height }!!
 
             val jpegSizes = map.getOutputSizes(ImageFormat.JPEG)
-            val jpegSize = jpegSizes?.maxByOrNull { it.width * it.height }
+            val jpegSize = jpegSizes?.maxByOrNull { it.width * it.height }//highest quality
                 ?: previewSize
-
+            
             if (jpegSize != null) {
                 imageReader = ImageReader.newInstance(
                     jpegSize.width,
@@ -162,7 +161,7 @@ class welcome_window : AppCompatActivity() {
                     2
                 )//this is where captured images go
             }
-
+            //ImageReader → JPEG bytes → saveToGallery()
             /*Get image buffer
             * convert to byte array
             * save to gallery
@@ -170,25 +169,25 @@ class welcome_window : AppCompatActivity() {
             imageReader.setOnImageAvailableListener({ reader ->
                 val image = reader.acquireLatestImage() ?: return@setOnImageAvailableListener
                 try {
-                    val buffer = image.planes[0].buffer
-                    val bytes = ByteArray(buffer.remaining())
+                    val buffer = image.planes[0].buffer//read image
+                    val bytes = ByteArray(buffer.remaining())//convert to byte array
                     buffer.get(bytes)
 
-                    lastImageUri = saveToGallery(bytes)
+                    lastImageUri = saveToGallery(bytes)//saves image
                     Log.d("CAMERA", "Saved URI: $lastImageUri")
 
                 } finally {
                     image.close()
                 }
 
-                runOnUiThread {
+                runOnUiThread {//ui update
                     Toast.makeText(this, "Saved", Toast.LENGTH_SHORT).show()
 
-                    // open next page
+                    // open next page aka PreviewActivity
                     lastImageUri?.let {
                         Log.d("CAMERA", "Sending URI to PreviewActivity: $lastImageUri")
                         val intent = Intent(this, PreviewActivity::class.java)
-                        intent.putExtra("image_uri", lastImageUri.toString())
+                        intent.putExtra("image_uri", lastImageUri.toString())//sends image to preview screen
                         startActivity(intent)
                     }
                 }
@@ -200,8 +199,7 @@ class welcome_window : AppCompatActivity() {
         }
     }
 
-    // ---------------- PREVIEW ----------------
-
+    //PREVIEW
     private fun createPreviewSession() {//live camera feed
         val texture = textureView.surfaceTexture!!
         texture.setDefaultBufferSize(previewSize.width, previewSize.height)
@@ -237,7 +235,7 @@ class welcome_window : AppCompatActivity() {
         session.setRepeatingRequest(previewRequest.build(), null, backgroundHandler)
     }
 
-    // ---------------- CAPTURE ----------------
+    //CAPTURE
     private fun capturePhoto() {
         if (!::session.isInitialized) return
         if (isCapturing || !::cameraDevice.isInitialized) return
@@ -283,13 +281,11 @@ class welcome_window : AppCompatActivity() {
         return result
     }
 
-    // ---------------- BACKGROUND THREAD ----------------
-
+    //BACKGROUND THREAD for Camera2
     private fun startThread() {
         backgroundThread = HandlerThread("camera").apply { start() }//Camera2 does not run on main ui thread
         backgroundHandler = Handler(backgroundThread!!.looper)
     }
-
     private fun stopThread() {
         backgroundThread?.quitSafely()
         backgroundThread?.join()
@@ -297,8 +293,7 @@ class welcome_window : AppCompatActivity() {
         backgroundHandler = null
     }
 
-    // ---------------- LIFECYCLE ----------------
-
+    //LIFECYCLE
     override fun onResume() {//start camera thread and attach texture listener
         super.onResume()
         startThread()
@@ -319,16 +314,13 @@ class welcome_window : AppCompatActivity() {
     }
     override fun onPause() {//close camera and stop background thread
         super.onPause()
-
         if (::session.isInitialized) session.close()
         if (::cameraDevice.isInitialized) cameraDevice.close()
         if (::imageReader.isInitialized) imageReader.close()
-
         stopThread()
     }
 
-    // ---------------- SURFACE ----------------
-
+    //SURFACE
     private val surfaceListener = object : TextureView.SurfaceTextureListener {
 
         override fun onSurfaceTextureAvailable(surface: SurfaceTexture, w: Int, h: Int) {
@@ -341,26 +333,21 @@ class welcome_window : AppCompatActivity() {
         override fun onSurfaceTextureUpdated(surface: SurfaceTexture) {}
     }
 
-    // ---------------- CAMERA CALLBACK ----------------
-
+    //CAMERA CALLBACK
     private val stateCallback = object : CameraDevice.StateCallback() {
-
         override fun onOpened(camera: CameraDevice) {//when camera opens
             cameraDevice = camera
             createPreviewSession()//start the preview
         }
-
         override fun onDisconnected(camera: CameraDevice) {
             camera.close()
         }
-
         override fun onError(camera: CameraDevice, error: Int) {
             camera.close()
         }
     }
 
-    // ---------------- SAVE IMAGE ----------------
-
+    //SAVE IMAGE
     private fun saveToGallery(bytes: ByteArray): Uri? {
         val username = UserSession.username ?: "unknown"//save per user
 
@@ -388,8 +375,7 @@ class welcome_window : AppCompatActivity() {
         return uri//returns the uri to show on another activity
     }
 
-    // ---------------- PERMISSION ----------------
-
+    //PERMISSION
     private fun hasPermission() =
         ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) ==
                 PackageManager.PERMISSION_GRANTED
