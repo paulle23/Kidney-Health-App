@@ -9,16 +9,16 @@ Features\
 - User Authentication\
 User registration and login system using SQLite database\
 Secure credential validation\
-Error handling for incorrect login attempts\
+Error handling for incorrect login attempts
 - Session Management\
 Global user session using singleton (UserSession)\
 Stores logged-in user details across activities\
-Logout functionality with session clearing\
+Logout functionality with session clearing
   - Custom Camera (Camera2 API)\
 Live camera preview using TextureView\
 Manual focus control using SeekBar\
 High-resolution image capture using ImageReader\
-Saves images directly to device storage\
+Saves images directly to device storage
 - Image Storage & Gallery\
 Images saved in MediaStore\
 
