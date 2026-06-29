@@ -1,25 +1,25 @@
 # Kidney-Health-App\
 
 CurrentVersion\
-📱 Android User Authentication & Camera Gallery App\
+- Android User Authentication & Camera Gallery App\
 
 An Android application that integrates user authentication, session management, custom Camera2 API functionality, and a personalized image gallery system. Users can register, log in, capture images, and view their photos in a structured gallery.\
 
 Features\
-🔐 User Authentication\
+- User Authentication\
 User registration and login system using SQLite database\
 Secure credential validation\
 Error handling for incorrect login attempts\
-👤 Session Management\
+- Session Management\
 Global user session using singleton (UserSession)\
 Stores logged-in user details across activities\
 Logout functionality with session clearing\
-📷 Custom Camera (Camera2 API)\
+  - Custom Camera (Camera2 API)\
 Live camera preview using TextureView\
 Manual focus control using SeekBar\
 High-resolution image capture using ImageReader\
 Saves images directly to device storage\
-🖼 Image Storage & Gallery\
+- Image Storage & Gallery\
 Images saved in MediaStore\
 
 User-specific folder structure:\
@@ -27,10 +27,10 @@ User-specific folder structure:\
 Pictures/MyCameraApp/<username>/\
 Gallery view using RecyclerView (GridLayoutManager)\
 Efficient image loading with Glide\
-🔍 Image Preview\
+- Image Preview\
 Full-screen image preview using PreviewActivity\
 Smooth navigation from gallery or camera capture\
-🧱 Tech Stack\
+- Tech Stack\
 Kotlin\
 Android SDK\
 Camera2 API\
@@ -39,7 +39,7 @@ RecyclerView\
 Glide\
 MediaStore\
 View Binding\
-📱 App Flow\
+- App Flow\
 App Launch\
    ↓\
 Login / Register Screen\
@@ -51,7 +51,7 @@ Dashboard (Results)\
  ├── Camera (Capture Images)\
  ├── Gallery (View Images)\
  └── Logout\
-📷 Camera Workflow\
+- Camera Workflow\
 Live Preview (TextureView)\
         ↓\
 User adjusts focus (SeekBar)\
@@ -63,7 +63,7 @@ ImageReader receives JPEG\
 Save to MediaStore\
         ↓\
 Open Preview Screen\
-🖼 Gallery Workflow\
+- Gallery Workflow\
 Query MediaStore\
         ↓\
 Filter images by username folder\
@@ -71,7 +71,7 @@ Filter images by username folder\
 Display using RecyclerView grid\
         ↓\
 Click image → Open PreviewActivity\
-🧠 Key Concepts Used\
+- Key Concepts Used\
 Android Activity lifecycle\
 Camera2 API implementation\
 SQLite database operations\
