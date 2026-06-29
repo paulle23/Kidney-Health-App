@@ -1,6 +1,6 @@
-# Kidney-Health-App\
+# Kidney-Health-App
 
-CurrentVersion\
+CurrentVersion
 - Android User Authentication & Camera Gallery App\
 
 An Android application that integrates user authentication, session management, custom Camera2 API functionality, and a personalized image gallery system. Users can register, log in, capture images, and view their photos in a structured gallery.\
@@ -29,7 +29,7 @@ Gallery view using RecyclerView (GridLayoutManager)\
 Efficient image loading with Glide\
 - Image Preview\
 Full-screen image preview using PreviewActivity\
-Smooth navigation from gallery or camera capture\
+Smooth navigation from gallery or camera capture
 - Tech Stack\
 Kotlin\
 Android SDK\
@@ -38,7 +38,7 @@ SQLite Database\
 RecyclerView\
 Glide\
 MediaStore\
-View Binding\
+View Binding
 - App Flow\
 App Launch\
    ↓\
@@ -50,7 +50,7 @@ Dashboard (Results)\
    ↓\
  ├── Camera (Capture Images)\
  ├── Gallery (View Images)\
- └── Logout\
+ └── Logout
 - Camera Workflow\
 Live Preview (TextureView)\
         ↓\
@@ -62,7 +62,7 @@ ImageReader receives JPEG\
         ↓\
 Save to MediaStore\
         ↓\
-Open Preview Screen\
+Open Preview Screen
 - Gallery Workflow\
 Query MediaStore\
         ↓\
@@ -70,14 +70,14 @@ Filter images by username folder\
         ↓\
 Display using RecyclerView grid\
         ↓\
-Click image → Open PreviewActivity\
+Click image → Open PreviewActivity
 - Key Concepts Used\
 Android Activity lifecycle\
 Camera2 API implementation\
 SQLite database operations\
 Singleton pattern (session management)\
 RecyclerView Adapter pattern\
-MediaStore file storage system\
+MediaStore file storage system
 
 OldVersion - The version of the code I submitted for my Design Project. It has the login and register screen, login, results page, and camera view. User login info is kept through intents. \
     old_welcome_window.kt - original code for the camera screen\
