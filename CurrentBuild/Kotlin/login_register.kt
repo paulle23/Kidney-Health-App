@@ -10,7 +10,7 @@ import com.example.firedatabase_assis.databinding.ActivityLoginRegisterBinding
 class login_register : AppCompatActivity() {
     private lateinit var bind: ActivityLoginRegisterBinding /*bind gives direct access to UI elements in the XML layout.
     lateinit means: Variable will be initialized later Avoids null values*/
-    @SuppressLint("Range")
+    //@SuppressLint("Range")
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState) //Calls the parent activity setup
         bind = ActivityLoginRegisterBinding.inflate(layoutInflater) //creates binding object and connects code to XML layout
